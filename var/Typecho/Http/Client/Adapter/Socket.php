@@ -28,7 +28,7 @@ class Typecho_Http_Client_Adapter_Socket extends Typecho_Http_Client_Adapter
      */
     public static function isAvailable()
     {
-        return function_exists("ini_get") && ini_get('allow_url_fopen');
+        return function_exists("fsockopen");
     }
 
     /**
@@ -144,11 +144,11 @@ class Typecho_Http_Client_Adapter_Socket extends Typecho_Http_Client_Adapter
     {
         /** 支持chunked编码 */
         if ('chunked' == $this->getResponseHeader('Transfer-Encoding')) {
-            $parts = explode("\r\n", $this->reponseBody, 2);
+            $parts = explode("\r\n", $this->responseBody, 2);
             $counter = hexdec($parts[0]);
-            $this->reponseBody = substr($parts[1], 0, $counter);
+            $this->responseBody = substr($parts[1], 0, $counter);
         }
 
-        return $this->reponseBody;
+        return $this->responseBody;
     }
 }

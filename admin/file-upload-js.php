@@ -94,6 +94,9 @@ $(document).ready(function() {
         li.effect('highlight', {color : '#FBC2C4'}, 2000, function () {
             $(this).remove();
         });
+
+        // fix issue #341
+        this.removeFile(file);
     }
 
     var completeFile = null;
@@ -117,8 +120,8 @@ $(document).ready(function() {
         }
     }
 
-    $('#tab-files').bind('init', function () {
-        var uploader = new plupload.Uploader({
+    var uploader = null, tabFilesEl = $('#tab-files').bind('init', function () {
+        uploader = new plupload.Uploader({
             browse_button   :   $('.upload-file').get(0),
             url             :   '<?php $security->index('/action/upload'
                 . (isset($fileParentContent) ? '?cid=' . $fileParentContent->cid : '')); ?>',
@@ -133,9 +136,9 @@ $(document).ready(function() {
 
             init            :   {
                 FilesAdded      :   function (up, files) {
-                    plupload.each(files, function(file) {
-                        fileUploadStart(file);
-                    });
+                    for (var i = 0; i < files.length; i ++) {
+                        fileUploadStart(files[i]);
+                    }
 
                     completeFile = null;
                     uploader.start();
@@ -153,24 +156,42 @@ $(document).ready(function() {
 
                         if (data) {
                             fileUploadComplete(file.id, data[0], data[1]);
+                            uploader.removeFile(file);
                             return;
                         }
                     }
 
-                    fileUploadError({
+                    fileUploadError.call(uploader, {
                         code : plupload.HTTP_ERROR,
                         file : file
                     });
                 },
 
                 Error           :   function (up, error) {
-                    fileUploadError(error);
+                    fileUploadError.call(uploader, error);
                 }
             }
         });
 
         uploader.init();
     });
+
+    Typecho.uploadFile = function (file, name) {
+        if (!uploader) {
+            $('#tab-files-btn').parent().trigger('click');
+        }
+        
+        var timer = setInterval(function () {
+            if (!uploader) {
+                return;
+            }
+
+            clearInterval(timer);
+            timer = null;
+
+            uploader.addFile(file, name);
+        }, 50);
+    };
 
     function attachInsertEvent (el) {
         $('.insert', el).click(function () {

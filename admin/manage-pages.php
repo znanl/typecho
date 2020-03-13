@@ -18,6 +18,8 @@ $stat = Typecho_Widget::widget('Widget_Stat');
                             <button class="btn dropdown-toggle btn-s" type="button"><i class="sr-only"><?php _e('操作'); ?></i><?php _e('选中项'); ?> <i class="i-caret-down"></i></button>
                             <ul class="dropdown-menu">
                                 <li><a lang="<?php _e('你确认要删除这些页面吗?'); ?>" href="<?php $security->index('/action/contents-page-edit?do=delete'); ?>"><?php _e('删除'); ?></a></li>
+                                <li><a href="<?php $security->index('/action/contents-page-edit?do=mark&status=publish'); ?>"><?php _e('标记为<strong>%s</strong>', _t('公开')); ?></a></li>
+                                <li><a href="<?php $security->index('/action/contents-page-edit?do=mark&status=hidden'); ?>"><?php _e('标记为<strong>%s</strong>', _t('隐藏')); ?></a></li>
                             </ul>
                             </div>
                         </div>
@@ -59,16 +61,19 @@ $stat = Typecho_Widget::widget('Widget_Stat');
                             <?php while($pages->next()): ?>
                             <tr id="<?php $pages->theId(); ?>">
                                 <td><input type="checkbox" value="<?php $pages->cid(); ?>" name="cid[]"/></td>
-                                <td><a href="<?php $options->adminUrl('manage-comments.php?cid=' . $pages->cid); ?>" class="balloon-button size-<?php echo Typecho_Common::splitByCount($pages->commentsNum, 1, 10, 20, 50, 100); ?>"><?php $pages->commentsNum(); ?></a></td>
+                                <td><a href="<?php $options->adminUrl('manage-comments.php?cid=' . $pages->cid); ?>" class="balloon-button size-<?php echo Typecho_Common::splitByCount($pages->commentsNum, 1, 10, 20, 50, 100); ?>" title="<?php $pages->commentsNum(); ?> <?php _e('评论'); ?>"><?php $pages->commentsNum(); ?></a></td>
                                 <td>
                                 <a href="<?php $options->adminUrl('write-page.php?cid=' . $pages->cid); ?>"><?php $pages->title(); ?></a>
                                 <?php 
                                 if ($pages->hasSaved || 'page_draft' == $pages->type) {
                                     echo '<em class="status">' . _t('草稿') . '</em>';
-                                } else if ('hidden' == $pages->status) {
+                                }
+                                
+                                if ('hidden' == $pages->status) {
                                     echo '<em class="status">' . _t('隐藏') . '</em>';
                                 }
                                 ?>
+                                <a href="<?php $options->adminUrl('write-page.php?cid=' . $pages->cid); ?>" title="<?php _e('编辑 %s', htmlspecialchars($pages->title)); ?>"><i class="i-edit"></i></a>
                                 <?php if ('page_draft' != $pages->type): ?>
                                 <a href="<?php $pages->permalink(); ?>" title="<?php _e('浏览 %s', htmlspecialchars($pages->title)); ?>"><i class="i-exlink"></i></a>
                                 <?php endif; ?>

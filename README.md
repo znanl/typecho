@@ -1,15 +1,19 @@
 Typecho Blogging Platform
 =========================
 
-####Homepage
+Typecho is a PHP Blogging Platform. Simple and Powerful.
+
+#### Telegram Channel
+https://t.me/typechodev
+
+#### Homepage
 http://typecho.org/
 
-####Document
+#### Documents
 http://docs.typecho.org/
 
-####Forum
+#### Community
 http://forum.typecho.org/
 
-####Download
+#### Download
 http://typecho.org/download
-

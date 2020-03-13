@@ -1761,6 +1761,7 @@ else
                                                   */
 
         hooks.addNoop("makeButton");
+        hooks.addNoop("commandExecuted");
 
         hooks.addNoop("enterFullScreen");
         hooks.addNoop("enterFakeFullScreen");
@@ -2877,7 +2878,9 @@ else
             else {
                 // Fixes common pasting errors.
                 text = text.replace(/^http:\/\/(https?|ftp):\/\//, '$1://');
-                if (!/^(?:https?|ftp):\/\//.test(text))
+
+                // fix issue #552
+                if (!/^(?:https?|ftp):\/\//.test(text) && !/^[_a-z0-9-]+:/i.test(text))
                     text = 'http://' + text;
             }
 
@@ -3236,9 +3239,20 @@ else
         }
 
         function bindCommand(method) {
-            if (typeof method === "string")
+            var methodName;
+
+            if (typeof method === "string") {
+                methodName = method;
                 method = commandManager[method];
-            return function () { method.apply(commandManager, arguments); }
+            }
+
+            return function () {
+                method.apply(commandManager, arguments);
+
+                if (methodName) {
+                    hooks.commandExecuted(methodName);
+                }
+            }
         }
 
         function makeSpritedButtonRow() {
@@ -3628,6 +3642,8 @@ else
                     }
                 }
                 postProcessing();
+
+                that.hooks.commandExecuted(isImage ? 'doImage' : 'doLink');
             };
 
             background = ui.createBackground();
@@ -3999,6 +4015,7 @@ else
         this.wrap(chunk, SETTINGS.lineLength - spaces.length);
         chunk.selection = chunk.selection.replace(/\n/g, "\n" + spaces);
 
+        this.hooks.commandExecuted('doList');
     };
 
     commandProto.doHeading = function (chunk, postProcessing) {

@@ -58,7 +58,7 @@
                         }
 
                         t.effect('highlight', {color : color})
-                            .delay(5000).slideUp(function () {
+                            .delay(5000).fadeOut(function () {
                             $(this).remove();
                         });
                     });
@@ -97,9 +97,14 @@
                         return;
                     }
 
-                    t.attr('target', '_blank');
+                    t.attr('target', '_blank')
+                        .attr('rel', 'noopener noreferrer');
                 });
             }
+
+            $('.main form').submit(function () {
+                $('button[type=submit]', this).attr('disabled', 'disabled');
+            });
         });
     })();
 </script>
