@@ -1,15 +1,44 @@
 <?php if(!defined('__TYPECHO_ADMIN__')) exit; ?>
-<?php $content = !empty($post) ? $post : $page; if ($options->markdown): ?>
-<script src="<?php $options->adminStaticUrl('js', 'pagedown.js?v=' . $suffixVersion); ?>"></script>
-<script src="<?php $options->adminStaticUrl('js', 'pagedown-extra.js?v=' . $suffixVersion); ?>"></script>
-<script src="<?php $options->adminStaticUrl('js', 'diff.js?v=' . $suffixVersion); ?>"></script>
+<?php $content = !empty($post) ? $post : $page; ?>
+<script>
+(function () {
+    $('#text').on('change', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }).on('input', function () {
+        $(this).parents('form').trigger('write');
+    });
+})();
+</script>
+<?php if (!$options->markdown): ?>
+<script>
+(function () {
+    const textarea = $('#text');
+
+    // 原始的插入图片和文件
+    Typecho.insertFileToEditor = function (file, url, isImage) {
+        const sel = textarea.getSelection(),
+            html = isImage ? '<img src="' + url + '" alt="' + file + '" />'
+                : '<a href="' + url + '">' + file + '</a>',
+            offset = (sel ? sel.start : 0) + html.length;
+
+        textarea.replaceSelection(html);
+        textarea.setSelection(offset, offset);
+    };
+})();
+</script>
+<?php else: ?>
+<script src="<?php $options->adminStaticUrl('js', 'hyperdown.js'); ?>"></script>
+<script src="<?php $options->adminStaticUrl('js', 'pagedown.js'); ?>"></script>
+<script src="<?php $options->adminStaticUrl('js', 'purify.js'); ?>"></script>
 <script>
 $(document).ready(function () {
-    var textarea = $('#text'),
+    const textarea = $('#text'),
         toolbar = $('<div class="editor" id="wmd-button-bar" />').insertBefore(textarea.parent()),
         preview = $('<div id="wmd-preview" class="wmd-hidetab" />').insertAfter('.editor');
+    let isFullScreen = false;
 
-    var options = {}, isMarkdown = <?php echo intval($content->isMarkdown || !$content->have()); ?>;
+    const options = {}, isMarkdown = <?php echo json_encode(!$content->have() || $content->isMarkdown); ?>;
 
     options.strings = {
         bold: '<?php _e('加粗'); ?> <strong> Ctrl+B',
@@ -57,31 +86,18 @@ $(document).ready(function () {
         help: '<?php _e('Markdown语法帮助'); ?>'
     };
 
-    var converter = new Markdown.Converter(),
-        editor = new Markdown.Editor(converter, '', options),
-        diffMatch = new diff_match_patch(), last = '', preview = $('#wmd-preview'),
-        mark = '@mark' + Math.ceil(Math.random() * 100000000) + '@',
-        span = '<span class="diff" />',
-        cache = {};
-
-    Markdown.Extra.init(converter, {
-        'extensions' : ["tables", "fenced_code_gfm", "def_list", "attr_list", "footnotes", "strikethrough", "newlines"]
-    });
+    const converter = new HyperDown(),
+        editor = new Markdown.Editor(converter, '', options);
 
     // 自动跟随
-    converter.hooks.chain('postConversion', function (html) {
-        // clear special html tags
-        html = html.replace(/<\/?(\!doctype|html|head|body|link|title|input|select|button|textarea|style|noscript)[^>]*>/ig, function (all) {
-            return all.replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/'/g, '&#039;')
-                .replace(/"/g, '&quot;');
-        });
+    converter.enableHtml(true);
+    converter.enableLine(true);
+    const reloadScroll = scrollableEditor(textarea, preview);
 
-        // clear hard breaks
-        html = html.replace(/\s*((?:<br>\n)+)\s*(<\/?(?:p|div|h[1-6]|blockquote|pre|table|dl|ol|ul|address|form|fieldset|iframe|hr|legend|article|section|nav|aside|hgroup|header|footer|figcaption|li|dd|dt)[^\w])/gm, '$2');
-
+    // 修正白名单
+    converter.hook('makeHtml', function (html) {
+        html = html.replace('<p><!--more--></p>', '<!--more-->');
+        
         if (html.indexOf('<!--more-->') > 0) {
             var parts = html.split(/\s*<\!\-\-more\-\->\s*/),
                 summary = parts.shift(),
@@ -91,137 +107,40 @@ $(document).ready(function () {
                 + '<div class="details">' + details + '</div>';
         }
 
-
-        var diffs = diffMatch.diff_main(last, html);
-        last = html;
-
-        if (diffs.length > 0) {
-            var stack = [], markStr = mark;
-            
-            for (var i = 0; i < diffs.length; i ++) {
-                var diff = diffs[i], op = diff[0], str = diff[1]
-                    sp = str.lastIndexOf('<'), ep = str.lastIndexOf('>');
-
-                if (op != 0) {
-                    if (sp >=0 && sp > ep) {
-                        if (op > 0) {
-                            stack.push(str.substring(0, sp) + markStr + str.substring(sp));
-                        } else {
-                            var lastStr = stack[stack.length - 1], lastSp = lastStr.lastIndexOf('<');
-                            stack[stack.length - 1] = lastStr.substring(0, lastSp) + markStr + lastStr.substring(lastSp);
-                        }
-                    } else {
-                        if (op > 0) {
-                            stack.push(str + markStr);
-                        } else {
-                            stack.push(markStr);
-                        }
-                    }
-                    
-                    markStr = '';
-                } else {
-                    stack.push(str);
-                }
-            }
-
-            html = stack.join('');
-
-            if (!markStr) {
-                var pos = html.indexOf(mark), prev = html.substring(0, pos),
-                    next = html.substr(pos + mark.length),
-                    sp = prev.lastIndexOf('<'), ep = prev.lastIndexOf('>');
-
-                if (sp >= 0 && sp > ep) {
-                    html = prev.substring(0, sp) + span + prev.substring(sp) + next;
-                } else {
-                    html = prev + span + next;
-                }
-            }
-        }
-
-        // 替换img
-        html = html.replace(/<(img)\s+([^>]*)\s*src="([^"]+)"([^>]*)>/ig, function (all, tag, prefix, src, suffix) {
-            if (!cache[src]) {
-                cache[src] = false;
-            } else {
-                return '<span class="cache" data-width="' + cache[src][0] + '" data-height="' + cache[src][1] + '" '
-                    + 'style="background:url(' + src + ') no-repeat left top; width:'
-                    + cache[src][0] + 'px; height:' + cache[src][1] + 'px; display: inline-block; max-width: 100%;'
-                    + '-webkit-background-size: contain;-moz-background-size: contain;-o-background-size: contain;background-size: contain;" />';
-            }
-
-            return all;
-        });
-
         // 替换block
         html = html.replace(/<(iframe|embed)\s+([^>]*)>/ig, function (all, tag, src) {
-            if (src[src.length - 1] == '/') {
+            if (src[src.length - 1] === '/') {
                 src = src.substring(0, src.length - 1);
             }
 
-            return '<div style="background: #ddd; height: 40px; overflow: hidden; line-height: 40px; text-align: center; font-size: 12px; color: #777">'
-                + tag + ' : ' + $.trim(src) + '</div>';
+            return '<div class="embed"><strong>'
+                + tag + '</strong> : ' + $.trim(src) + '</div>';
         });
 
-        return html;
+        return DOMPurify.sanitize(html, {USE_PROFILES: {html: true}});
     });
 
-    function cacheResize() {
-        var t = $(this), w = parseInt(t.data('width')), h = parseInt(t.data('height')),
-            ow = t.width();
-
-        t.height(h * ow / w);
-    }
-
-    var to;
     editor.hooks.chain('onPreviewRefresh', function () {
-        var diff = $('.diff', preview), scrolled = false;
+        const images = $('img', preview);
+        let count = images.length;
 
-        if (to) {
-            clearTimeout(to);
-        }
+        if (count === 0) {
+            reloadScroll(true);
+        } else {
+            images.bind('load error', function () {
+                count --;
 
-        $('img', preview).load(function () {
-            var t = $(this), src = t.attr('src');
-
-            if (scrolled) {
-                preview.scrollTo(diff, {
-                    offset  :   - 50
-                });
-            }
-
-            if (!!src && !cache[src]) {
-                cache[src] = [this.width, this.height];
-            }
-        });
-
-        $('.cache', preview).resize(cacheResize).each(cacheResize);
-        
-        var changed = $('.diff', preview).parent();
-        if (!changed.is(preview)) {
-            changed.css('background-color', 'rgba(255,230,0,0.5)');
-            to = setTimeout(function () {
-                changed.css('background-color', 'transparent');
-            }, 4500);
-        }
-
-        if (diff.length > 0) {
-            var p = diff.position(), lh = diff.parent().css('line-height');
-            lh = !!lh ? parseInt(lh) : 0;
-
-            if (p.top < 0 || p.top > preview.height() - lh) {
-                preview.scrollTo(diff, {
-                    offset  :   - 50
-                });
-                scrolled = true;
-            }
+                if (count === 0) {
+                    reloadScroll(true);
+                }
+            });
         }
     });
 
-    <?php Typecho_Plugin::factory('admin/editor-js.php')->markdownEditor($content); ?>
+    <?php \Typecho\Plugin::factory('admin/editor-js.php')->call('markdownEditor', $content); ?>
 
-    var input = $('#text'), th = textarea.height(), ph = preview.height(),
-        uploadBtn = $('<button type="button" id="btn-fullscreen-upload" class="btn btn-link">'
+    let th = textarea.height(), ph = preview.height();
+    const uploadBtn = $('<button type="button" id="btn-fullscreen-upload" class="btn btn-link">'
             + '<i class="i-upload"><?php _e('附件'); ?></i></button>')
             .prependTo('.submit .right')
             .click(function() {
@@ -238,39 +157,50 @@ $(document).ready(function () {
         th = textarea.height();
         ph = preview.height();
         $(document.body).addClass('fullscreen');
-        var h = $(window).height() - toolbar.outerHeight();
+        const h = $(window).height() - toolbar.outerHeight();
         
         textarea.css('height', h);
         preview.css('height', h);
+        isFullScreen = true;
     });
 
     editor.hooks.chain('enterFullScreen', function () {
         $(document.body).addClass('fullscreen');
         
-        var h = window.screen.height - toolbar.outerHeight();
+        const h = window.screen.height - toolbar.outerHeight();
         textarea.css('height', h);
         preview.css('height', h);
+        isFullScreen = true;
     });
 
     editor.hooks.chain('exitFullScreen', function () {
         $(document.body).removeClass('fullscreen');
         textarea.height(th);
         preview.height(ph);
+        isFullScreen = false;
+    });
+
+    editor.hooks.chain('commandExecuted', function () {
+        textarea.trigger('input');
+    });
+
+    editor.hooks.chain('save', function () {
+        Typecho.savePost();
     });
 
     function initMarkdown() {
         editor.run();
 
-        var imageButton = $('#wmd-image-button'),
+        const imageButton = $('#wmd-image-button'),
             linkButton = $('#wmd-link-button');
 
         Typecho.insertFileToEditor = function (file, url, isImage) {
-            var button = isImage ? imageButton : linkButton;
+            const button = isImage ? imageButton : linkButton;
 
             options.strings[isImage ? 'imagename' : 'linkname'] = file;
             button.trigger('click');
 
-            var checkDialog = setInterval(function () {
+            let checkDialog = setInterval(function () {
                 if ($('.wmd-prompt-dialog').length > 0) {
                     $('.wmd-prompt-dialog input').val(url).select();
                     clearInterval(checkDialog);
@@ -279,12 +209,12 @@ $(document).ready(function () {
             }, 10);
         };
 
-        Typecho.uploadComplete = function (file) {
-            Typecho.insertFileToEditor(file.title, file.url, file.isImage);
+        Typecho.uploadComplete = function (attachment) {
+            Typecho.insertFileToEditor(attachment.title, attachment.url, attachment.isImage);
         };
 
         // 编辑预览切换
-        var edittab = $('.editor').prepend('<div class="wmd-edittab"><a href="#wmd-editarea" class="active"><?php _e('撰写'); ?></a><a href="#wmd-preview"><?php _e('预览'); ?></a></div>'),
+        const edittab = $('.editor').append('<div class="wmd-edittab"><a href="#wmd-editarea" class="active"><?php _e('撰写'); ?></a><a href="#wmd-preview"><?php _e('预览'); ?></a></div>'),
             editarea = $(textarea.parent()).attr("id", "wmd-editarea");
 
         $(".wmd-edittab a").click(function() {
@@ -292,11 +222,11 @@ $(document).ready(function () {
             $(this).addClass("active");
             $("#wmd-editarea, #wmd-preview").addClass("wmd-hidetab");
         
-            var selected_tab = $(this).attr("href"),
+            const selected_tab = $(this).attr("href"),
                 selected_el = $(selected_tab).removeClass("wmd-hidetab");
 
             // 预览时隐藏编辑器按钮
-            if (selected_tab == "#wmd-preview") {
+            if (selected_tab === "#wmd-preview") {
                 $("#wmd-button-row").addClass("wmd-visualhide");
             } else {
                 $("#wmd-button-row").removeClass("wmd-visualhide");
@@ -307,12 +237,32 @@ $(document).ready(function () {
 
             return false;
         });
+
+        // 剪贴板复制图片
+        textarea.bind('paste', function (e) {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+
+            for (const item of items) {
+                if (item.kind === 'file') {
+                    const file = item.getAsFile();
+
+                    if (file.size > 0) {
+                        if (!file.name) {
+                            file.name = (new Date()).toISOString().replace(/\..+$/, '')
+                                + '.' + file.type.split('/').pop();
+                        }
+
+                        Typecho.uploadFile(file);
+                    }
+                }
+            }
+        });
     }
 
     if (isMarkdown) {
         initMarkdown();
     } else {
-        var notice = $('<div class="message notice"><?php _e('这篇文章不是由Markdown语法创建的, 继续使用Markdown编辑它吗?'); ?> '
+        const notice = $('<div class="message notice"><?php _e('这篇文章不是由Markdown语法创建的, 继续使用Markdown编辑它吗?'); ?> '
             + '<button class="btn btn-xs primary yes"><?php _e('是'); ?></button> ' 
             + '<button class="btn btn-xs no"><?php _e('否'); ?></button></div>')
             .hide().insertBefore(textarea).slideDown();

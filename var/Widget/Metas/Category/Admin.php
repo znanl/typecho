@@ -1,53 +1,60 @@
 <?php
-if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+
+namespace Widget\Metas\Category;
+
+use Typecho\Common;
+use Typecho\Db;
+use Typecho\Widget\Exception;
+use Widget\Base\Metas;
+use Widget\Base\TreeTrait;
+
+if (!defined('__TYPECHO_ROOT_DIR__')) {
+    exit;
+}
 
 /**
- * Widget_Metas_Category_Admin  
- * 
- * @uses Widget_Metas_Category_List
- * @copyright Copyright (c) 2012 Typecho Team. (http://typecho.org)
- * @author Joyqi <magike.net@gmail.com> 
- * @license GNU General Public License 2.0
+ * Category Admin
  */
-class Widget_Metas_Category_Admin extends Widget_Metas_Category_List
+class Admin extends Metas
 {
-   /**
+    use InitTreeRowsTrait;
+    use TreeTrait;
+
+    /**
+     * @var int Parent category
+     */
+    private int $parentId = 0;
+
+    /**
      * 执行函数
-     *
-     * @access public
-     * @return void
      */
     public function execute()
     {
-        $select = $this->db->select('mid')->from('table.metas')->where('type = ?', 'category');
-        $select->where('parent = ?', $this->request->parent ? $this->request->parent : 0);
-
-        $this->stack = $this->getCategories(Typecho_Common::arrayFlatten(
-            $this->db->fetchAll($select->order('table.metas.order', Typecho_Db::SORT_ASC)), 'mid'));
+        $this->parentId = $this->request->filter('int')->get('parent', 0);
+        $this->pushAll($this->getRows($this->getChildIds($this->parentId)));
     }
 
     /**
-     * 向上的返回链接 
-     * 
-     * @access public
-     * @return void
+     * 向上的返回链接
+     *
+     * @throws Db\Exception
      */
     public function backLink()
     {
-        if (isset($this->request->parent)) {
-            $category = $this->db->fetchRow($this->select()
-                ->where('type = ? AND mid = ?', 'category', $this->request->parent));
+        if ($this->parentId) {
+            $category = $this->getRow($this->parentId);
 
             if (!empty($category)) {
-                $parent = $this->db->fetchRow($this->select()
-                    ->where('type = ? AND mid = ?', 'category', $category['parent']));
+                $parent = $this->getRow($category['parent']);
 
                 if ($parent) {
-                    echo '<a href="' . Typecho_Common::url('manage-categories.php?parent=' . $parent['mid'], $this->options->adminUrl) . '">';
+                    echo '<a href="'
+                        . Common::url('manage-categories.php?parent=' . $parent['mid'], $this->options->adminUrl)
+                        . '">';
                 } else {
-                    echo '<a href="' . Typecho_Common::url('manage-categories.php', $this->options->adminUrl) . '">';
+                    echo '<a href="' . Common::url('manage-categories.php', $this->options->adminUrl) . '">';
                 }
-                
+
                 echo '&laquo; ';
                 _e('返回父级分类');
                 echo '</a>';
@@ -58,38 +65,31 @@ class Widget_Metas_Category_Admin extends Widget_Metas_Category_List
     /**
      * 获取菜单标题
      *
-     * @access public
-     * @return string
+     * @return string|null
+     * @throws Db\Exception|Exception
      */
-    public function getMenuTitle()
+    public function getMenuTitle(): ?string
     {
-        if (isset($this->request->parent)) {
-            $category = $this->db->fetchRow($this->select()
-                ->where('type = ? AND mid = ?', 'category', $this->request->parent));
+        if ($this->parentId) {
+            $category = $this->getRow($this->parentId);
 
             if (!empty($category)) {
                 return _t('管理 %s 的子分类', $category['name']);
             }
         } else {
-            return;
+            return null;
         }
 
-        throw new Typecho_Widget_Exception(_t('分类不存在'), 404);
+        throw new Exception(_t('分类不存在'), 404);
     }
 
     /**
      * 获取菜单标题
      *
-     * @access public
      * @return string
      */
-    public function getAddLink()
+    public function getAddLink(): string
     {
-        if (isset($this->request->parent)) {
-            return 'category.php?parent=' . $this->request->filter('int')->parent;
-        } else {
-            return 'category.php';
-        }
+        return 'category.php' . ($this->parentId ? '?parent=' . $this->parentId : '');
     }
 }
-

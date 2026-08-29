@@ -1,14 +1,13 @@
 <?php
-if (!defined('__TYPECHO_ROOT_DIR__')) exit;
-/**
- * 标签云
- *
- * @category typecho
- * @package Widget
- * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
- * @license GNU General Public License 2.0
- * @version $Id$
- */
+
+namespace Widget\Metas\Tag;
+
+use Typecho\Db;
+use Typecho\Widget\Exception;
+
+if (!defined('__TYPECHO_ROOT_DIR__')) {
+    exit;
+}
 
 /**
  * 标签云组件
@@ -18,39 +17,38 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
  * @license GNU General Public License 2.0
  */
-class Widget_Metas_Tag_Admin extends Widget_Metas_Tag_Cloud
+class Admin extends Cloud
 {
     /**
      * 入口函数
      *
-     * @access public
-     * @return void
+     * @throws Db\Exception
      */
     public function execute()
     {
-        $select = $this->select()->where('type = ?', 'tag')->order('mid', Typecho_Db::SORT_DESC);
-        $this->db->fetchAll($select, array($this, 'push'));
+        $select = $this->select()->where('type = ?', 'tag')->order('mid', Db::SORT_DESC);
+        $this->db->fetchAll($select, [$this, 'push']);
     }
 
     /**
      * 获取菜单标题
      *
-     * @access public
-     * @return string
+     * @return string|null
+     * @throws Exception|Db\Exception
      */
-    public function getMenuTitle()
+    public function getMenuTitle(): ?string
     {
-        if (isset($this->request->mid)) {
+        if ($this->request->is('mid')) {
             $tag = $this->db->fetchRow($this->select()
-                ->where('type = ? AND mid = ?', 'tag', $this->request->mid));
+                ->where('type = ? AND mid = ?', 'tag', $this->request->get('mid')));
 
             if (!empty($tag)) {
                 return _t('编辑标签 %s', $tag['name']);
             }
         } else {
-            return;
+            return null;
         }
 
-        throw new Typecho_Widget_Exception(_t('标签不存在'), 404);
+        throw new Exception(_t('标签不存在'), 404);
     }
 }

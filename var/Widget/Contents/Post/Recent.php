@@ -1,14 +1,13 @@
 <?php
-if (!defined('__TYPECHO_ROOT_DIR__')) exit;
-/**
- * 最新文章
- *
- * @category typecho
- * @package Widget
- * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
- * @license GNU General Public License 2.0
- * @version $Id$
- */
+
+namespace Widget\Contents\Post;
+
+use Typecho\Db;
+use Widget\Base\Contents;
+
+if (!defined('__TYPECHO_ROOT_DIR__')) {
+    exit;
+}
 
 /**
  * 最新评论组件
@@ -18,23 +17,38 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
  * @license GNU General Public License 2.0
  */
-class Widget_Contents_Post_Recent extends Widget_Abstract_Contents
+class Recent extends Contents
 {
     /**
      * 执行函数
      *
-     * @access public
-     * @return void
+     * @throws Db\Exception
      */
     public function execute()
     {
-        $this->parameter->setDefault(array('pageSize' => $this->options->postsListSize));
+        $this->parameter->setDefault(['pageSize' => $this->options->postsListSize]);
 
-        $this->db->fetchAll($this->select()
-        ->where('table.contents.status = ?', 'publish')
-        ->where('table.contents.created < ?', $this->options->gmtTime)
-        ->where('table.contents.type = ?', 'post')
-        ->order('table.contents.created', Typecho_Db::SORT_DESC)
-        ->limit($this->parameter->pageSize), array($this, 'push'));
+        $this->db->fetchAll($this->select(
+            'table.contents.cid',
+            'table.contents.title',
+            'table.contents.slug',
+            'table.contents.created',
+            'table.contents.modified',
+            'table.contents.type',
+            'table.contents.status',
+            'table.contents.commentsNum',
+            'table.contents.allowComment',
+            'table.contents.allowPing',
+            'table.contents.allowFeed',
+            'table.contents.template',
+            'table.contents.password',
+            'table.contents.authorId',
+            'table.contents.parent',
+        )
+            ->where('table.contents.status = ?', 'publish')
+            ->where('table.contents.created < ?', $this->options->time)
+            ->where('table.contents.type = ?', 'post')
+            ->order('table.contents.created', Db::SORT_DESC)
+            ->limit($this->parameter->pageSize), [$this, 'push']);
     }
 }
